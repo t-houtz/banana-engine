@@ -11,7 +11,7 @@ use log::*;
 
 use super::app_data::AppData;
 
-const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
+pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
 
 
 pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);

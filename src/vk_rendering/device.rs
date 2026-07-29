@@ -1,13 +1,18 @@
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 use thiserror::{Error};
+use std::collections::HashSet;
 use log::*;
+use vulkanalia::vk::KhrSurfaceExtensionInstanceCommands;
 
 use super::app_data::AppData;
+use super::instance::{PORTABILITY_MACOS_VERSION};
+use super::swapchain::SwapchainSupport;
+
+const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[vk::KHR_SWAPCHAIN_EXTENSION.name]; 
 
 #[derive(Debug, Error)]
 #[error("Missing {0}.")]
-
 pub struct SuitabilityError(pub &'static str);
 
 pub unsafe fn pick_physical_device(instance: &Instance, data: &mut AppData) -> Result<()> {
@@ -29,14 +34,77 @@ pub unsafe fn pick_physical_device(instance: &Instance, data: &mut AppData) -> R
 pub unsafe fn check_physical_device(instance: &Instance, data: &AppData, physical_device: vk::PhysicalDevice) -> Result<()> {
     let properties = instance.get_physical_device_properties(physical_device);
     let features = instance.get_physical_device_features(physical_device);
-
     QueueFamilyIndices::get(instance, data, physical_device)?;
+    check_physical_device_extensions(instance, physical_device)?;
+
+    let support = SwapchainSupport::get(instance, data, physical_device)?;
+    if support.formats.is_empty() || support.present_modes.is_empty() {
+        return Err(anyhow!(SuitabilityError("Insufficient swapchain support.")));
+    }
+
     Ok(())
+}
+
+unsafe fn check_physical_device_extensions(instance: &Instance, physical_device: vk::PhysicalDevice) -> Result<()> {
+    let extensions = instance
+        .enumerate_device_extension_properties(physical_device, None)?
+        .iter()
+        .map(|e| e.extension_name)
+        .collect::<HashSet<_>>();
+
+    if DEVICE_EXTENSIONS.iter().all(|e| extensions.contains(e)) {
+        Ok(())
+    }
+    else {
+        Err(anyhow!(SuitabilityError("Missing required device extensions.")))
+    }
+}
+
+pub unsafe fn create_logical_device(entry: &Entry, instance: &Instance, data: &mut AppData) -> Result<Device> {
+    let indices = QueueFamilyIndices::get(instance, data, data.physical_device)?;
+
+    let mut unique_indices = HashSet::new();
+    unique_indices.insert(indices.graphics);
+    unique_indices.insert(indices.present);
+
+    let queue_priorities = &[1.0];
+    let queue_infos = unique_indices
+        .iter()
+        .map(|i| {
+            vk::DeviceQueueCreateInfo::builder()
+                .queue_family_index(*i)
+                .queue_priorities(queue_priorities)
+        })
+        .collect::<Vec<_>>();
+
+    let mut extensions = DEVICE_EXTENSIONS
+        .iter()
+        .map(|n| n.as_ptr())
+        .collect::<Vec<_>>();
+
+    if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
+        extensions.push(vk::KHR_PORTABILITY_SUBSET_EXTENSION.name.as_ptr());
+    }
+
+    let features = vk::PhysicalDeviceFeatures::builder();
+
+    let info = vk::DeviceCreateInfo::builder()
+        .queue_create_infos(&queue_infos)
+        .enabled_extension_names(&extensions)
+        .enabled_features(&features);
+
+    let device = instance.create_device(data.physical_device, &info, None)?;
+
+    data.graphics_queue = device.get_device_queue(indices.graphics, 0);
+    data.present_queue = device.get_device_queue(indices.present, 0);
+
+    Ok(device)
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct QueueFamilyIndices {
-    graphics: u32
+    pub graphics: u32,
+    pub present: u32
 }
 
 impl QueueFamilyIndices {
@@ -47,8 +115,17 @@ impl QueueFamilyIndices {
             .position(|p| p.queue_flags.contains(vk::QueueFlags::GRAPHICS))
             .map(|i| i as u32);
 
-        if let Some(graphics) = graphics {
-            Ok(Self { graphics })
+        let mut present = None;
+        for (index, properties) in properties.iter().enumerate() {
+            if instance.get_physical_device_surface_support_khr(physical_device, index as u32, data.surface)?
+            {
+                present = Some(index as u32);
+                break;
+            }
+        }
+
+        if let (Some(graphics), Some(present)) = (graphics, present) {
+            Ok(Self { graphics, present })
         }
         else {
             Err(anyhow!(SuitabilityError("Missing required queue families.")))
