@@ -15,9 +15,8 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     // Window
-
     let event_loop = EventLoop::new()?;
-    let mut handler = vk_rendering::app_handler::AppHandler { window: None, app: None };
+    let mut handler = vk_rendering::app_handler::AppHandler { window: None, app: None, minimized: false };
 
     event_loop.run_app(&mut handler)?;
 

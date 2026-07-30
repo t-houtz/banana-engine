@@ -90,7 +90,6 @@ fn get_swapchain_surface_format(formats: &[vk::SurfaceFormatKHR]) -> vk::Surface
         })
         .unwrap_or_else(|| formats[0])
 }
-
 fn get_swapchain_present_mode(present_modes: &[vk::PresentModeKHR]) -> vk::PresentModeKHR {
     if VSYNC_ON {
         present_modes
@@ -107,7 +106,6 @@ fn get_swapchain_present_mode(present_modes: &[vk::PresentModeKHR]) -> vk::Prese
             .unwrap_or(vk::PresentModeKHR::FIFO)
     }
 }
-
 fn get_swapchain_extent(window: &Window, capabilities: vk::SurfaceCapabilitiesKHR) -> vk::Extent2D {
     if capabilities.current_extent.width != u32::MAX {
         capabilities.current_extent
@@ -125,7 +123,6 @@ fn get_swapchain_extent(window: &Window, capabilities: vk::SurfaceCapabilitiesKH
             .build()
     }
 }
-
 pub unsafe fn create_swapchain_image_views(device: &Device, data: &mut AppData) -> Result<()> {
 
     data.swapchain_image_views = data
