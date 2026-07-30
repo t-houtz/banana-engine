@@ -13,10 +13,6 @@ use winit::event_loop::EventLoop;
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
-    log::debug!("Logger initialized!");
-    log::info!("Info log test");
-    log::warn!("Warning log test");
-    log::error!("Error log test");
 
     // Window
 
